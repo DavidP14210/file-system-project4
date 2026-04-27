@@ -58,4 +58,10 @@ typedef struct {
     int padding;
 } dir_entry_t;
 
+typedef struct {
+    int used;       // 0 if empty, 1 if currently open
+    int dir_index;  // The index (0-63) of this file in the directory array
+    int offset;     // The current byte position for reading/writing
+} fd_entry_t;
+
 #endif
