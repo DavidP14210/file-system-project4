@@ -1,0 +1,1 @@
+gcc -Wall -Werror -fsanitize=address -fsanitize=leak -fsanitize=undefined -o app disk.o fs.o main.o
