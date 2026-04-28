@@ -347,12 +347,15 @@ int fs_read(int fildes, void *buf, size_t nbyte){
             return -1; 
         }
 
-        int block_offset = (offset + bytes_read) % 4096; 
-        int bytes_left_to_read = nbyte - bytes_read;
-        int chunk_size = 4096 - block_offset;
+        int block_offset = (offset + bytes_read) % 4096;
+        int bytes_left_to_write = nbyte - bytes_read;
+        int space_in_block = 4096 - block_offset;
+        int chunk_size;
 
-        if (bytes_left_to_read < chunk_size) {
-            chunk_size = bytes_left_to_read;
+        if (space_in_block < bytes_left_to_write) {
+            chunk_size = space_in_block; // Fill the block to the brim
+        } else {
+            chunk_size = bytes_left_to_write; // Finish the user's request
         }
 
         memcpy((char*)buf + bytes_read, bounce_buffer + block_offset, chunk_size);

@@ -1,58 +1,72 @@
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <assert.h>
-#include "disk.h"
+#include <pthread.h>
 #include "fs.h"
 
+char test_data[4096]; 
 #define DISK_NAME "vdisk"
 
-int main() {
-    if (make_fs(DISK_NAME) != 0) {
-        printf("Failed to make_fs\n");
-        return -1;
-    }
-
-    if (mount_fs(DISK_NAME) != 0) {
-        printf("Failed to mount_fs\n");
-        return -1;
-    }
-
-    printf("Disk initialized and mounted successfully!\n");
-
-    fs_create("hello.txt");
-
-    // 4. Open the file to get a File Descriptor (fildes)
-    int fd = fs_open("hello.txt");
-    assert(fd >= 0);
-
-    // 5. Write data
-    char *input = "Hello World!";
-    int bytes_written = fs_write(fd, input, strlen(input));
-    printf("Wrote %d bytes to hello.txt\n", bytes_written);
-
-    // 6. Seek back to the beginning so we can read
-    fs_lseek(fd, 0);
-
-    // 7. Read the data back
-    char output[20];
-    memset(output, 0, 20); // Clear the buffer
-    int bytes_read = fs_read(fd, output, strlen(input));
+void* reader_thread(void* arg) {
+    mount_fs(DISK_NAME);
     
-    printf("Read back: '%s' (%d bytes)\n", output, bytes_read);
-
-    // 8. Verify the data matches
-    if (strcmp(input, output) == 0) {
-        printf("SUCCESS: Data matches!\n");
-    } else {
-        printf("FAILURE: Data mismatch!\n");
-    }
-
+    int fd = fs_open("fileA");
+    char buffer[4096];
+    fs_read(fd, buffer, 4096);
     fs_close(fd);
-
-    // --- We will add the next steps here ---
-
+    
     unmount_fs(DISK_NAME);
+    return NULL;
+}
+
+void* copier_tester_thread(void* arg) {
+    mount_fs(DISK_NAME);
+    
+    // Copy fileA to fileB
+    fs_create("fileB");
+    int fd_old = fs_open("fileA");
+    int fd_new = fs_open("fileB");
+    
+    char copy_buf[4096];
+    fs_read(fd_old, copy_buf, 4096);
+    fs_write(fd_new, copy_buf, 4096);
+    
+    fs_close(fd_old);
+    fs_close(fd_new);
+    
+    // Delete original file
+    fs_delete("fileA");
+    
+    // Test remaining functions
+    int fd_test = fs_open("fileB");
+    fs_get_filesize(fd_test);
+    fs_truncate(fd_test, 100);
+    fs_close(fd_test);
+    
+    unmount_fs(DISK_NAME);
+    return NULL;
+}
+
+int main() {
+    memset(test_data, 'X', 4096);
+
+    // Create, write, close, and unmount
+    make_fs(DISK_NAME);
+    mount_fs(DISK_NAME);
+    
+    fs_create("fileA");
+    int fd = fs_open("fileA");
+    fs_write(fd, test_data, 4096);
+    fs_close(fd);
+    
+    unmount_fs(DISK_NAME);
+
+    // Launch threads sequentially
+    pthread_t t1, t2;
+    pthread_create(&t1, NULL, reader_thread, NULL);
+    pthread_join(t1, NULL); 
+    
+    pthread_create(&t2, NULL, copier_tester_thread, NULL);
+    pthread_join(t2, NULL);
+
     return 0;
 }
