@@ -141,7 +141,7 @@ int fs_create(char *fname){
         return -1;
     }
 
-    size_t len = strlen(name);
+    size_t len = strlen(fname);
     if(len == 0 || len >= NAME_LENGTH){
         return -1;
     }
@@ -160,7 +160,7 @@ int fs_create(char *fname){
     }
     
     if(id_file = -1){
-        fprintf("fs_open: full, already have 64 files previously made\n");
+        fprintf(stderr, "fs_open: full, already have 64 files previously made\n");
         return -1;
     }
 
@@ -303,7 +303,7 @@ int fs_read(int fildes, void *buf, size_t nbyte){
     }
 
     // 3. Fast-Forward to the correct starting block
-    int current_block = directory[dir_idx].head;
+    int current_block = root_directory[dir_idx].head;
     int blocks_to_skip = offset / 4096;
     
     for (int i = 0; i < blocks_to_skip; i++) {
@@ -314,7 +314,7 @@ int fs_read(int fildes, void *buf, size_t nbyte){
     char bounce_buffer[4096];
 
     while (bytes_read < nbyte) {
-        if (block_read(current_block, bounce_buffer) != 0) {
+        if (block_read(current_block + 4096, bounce_buffer) != 0) {
             return -1; 
         }
 
@@ -339,7 +339,54 @@ int fs_read(int fildes, void *buf, size_t nbyte){
 
     return bytes_read;
 }
-/*int fs_write(int fildes, void *buf, size_t nbye);
-int fs_get_filesize(int fildes);
+
+int fs_write(int fildes, void *buf, size_t nbye){
+    if(!is_mounted){
+        return -1;
+    }
+    if(fildes < 0 || fildes >= MAX_FDS){
+        return -1;
+    }
+    if (fdt[fildes].used == 0){
+        return -1;
+    }
+
+    int dir_idx = fdt[fildes].dir_index;
+    int offset = fdt[fildes].offset;
+
+    if (root_directory[dir_idx].head == -1) {
+        int first_block = -1;
+        
+        // Search the FAT for a free block (Starting at 6)
+        for (int i = 6; i < 4096; i++) { 
+            if (fat[i] == -1) { 
+                first_block = i;
+                break;
+            }
+        }
+
+        if (first_block == -1){
+            return 0;
+        }
+
+        // Claim it for our file
+        root_directory[dir_idx].head = first_block;
+        fat[first_block] = -2; // Mark this new block as the EOF
+    }
+
+    int current_block = root_directory[dir_idx].head;
+    int blocks_to_skip = offset / 4096;
+    for (int i = 0; i < blocks_to_skip; i++) {
+        current_block = fat[current_block];
+    }
+
+    size_t bytes_written = 0;
+    char bounce_buffer[4096];
+
+
+
+}
+
+/*int fs_get_filesize(int fildes);
 int fs_lseek(int fildes, off_t offset);
 int fs_truncate(int fildes, off_t length);*/
